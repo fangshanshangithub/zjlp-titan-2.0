@@ -6,6 +6,7 @@ import com.thinkaurelius.titan.core.TitanGraph;
 import com.zjlp.face.titan.service.ITitanDAO;
 import com.zjlp.face.titan.service.TitanConPool;
 import org.apache.tinkerpop.gremlin.process.traversal.P;
+import org.apache.tinkerpop.gremlin.process.traversal.Path;
 import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.GraphTraversal;
 import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.GraphTraversalSource;
 import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.__;
@@ -14,21 +15,34 @@ import org.apache.tinkerpop.gremlin.structure.T;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import com.zjlp.face.titan.service.UserVertexId;
-import org.springframework.stereotype.Service;
-
 import java.io.IOException;
 import java.io.Serializable;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
-@Service("TitanDAOImpl")
-public class TitanDAOImpl extends TitanConPool implements ITitanDAO, Serializable {
+/*@Service("TitanDAOImpl")*/
+public class TitanDAOImpl  implements ITitanDAO, Serializable {
+
+    private TitanConPool pool;
+
     private static EsDAOImpl esDAO = new EsDAOImpl();
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(TitanDAOImpl.class);
+    private static final Logger logger = LoggerFactory.getLogger(TitanDAOImpl.class);
 
+    public TitanDAOImpl(int poolSize) {
+        this.pool = new TitanConPool(poolSize);
+    }
+
+    public TitanDAOImpl() {
+        this(1);
+    }
+
+    public TitanConPool getPool() {
+        return pool;
+    }
+
+    public void setPool(TitanConPool pool) {
+        this.pool = pool;
+    }
 
     /**
      * 新增一个用户
@@ -42,11 +56,11 @@ public class TitanDAOImpl extends TitanConPool implements ITitanDAO, Serializabl
             vid = graph.addVertex(T.label, "person", "userId", userId).id().toString();
             esDAO.create(new UserVertexId(userId, vid));
             graph.tx().commit();
-            LOGGER.debug("添加新用户:" + userId);
+            logger.debug("添加新用户:" + userId);
         } catch (IOException e) {
-            LOGGER.error("往ES中插入doc失败: userId '" + userId + "'", e);
+            logger.error("往ES中插入doc失败: userId '" + userId + "'", e);
         } catch (Exception e) {
-            LOGGER.error("用户'" + userId + "'已经存在,插入失败", e);
+            logger.error("用户'" + userId + "'已经存在,插入失败", e);
             graph.tx().rollback();
         }
         return vid;
@@ -63,15 +77,15 @@ public class TitanDAOImpl extends TitanConPool implements ITitanDAO, Serializabl
         try {
             g.V(userVId).next().addEdge("knows", g.V(friendVId).next());
             g.tx().commit();
-            LOGGER.debug("添加好友关系:" + userVId + " -knows-> " + friendVId);
+            logger.debug("添加好友关系:" + userVId + " -knows-> " + friendVId);
         } catch (SchemaViolationException e) {
             e.printStackTrace();
             g.tx().rollback();
-            LOGGER.warn("已经存在这条边:" + userVId + " -knows-> " + friendVId, e);
+            logger.warn("已经存在这条边:" + userVId + " -knows-> " + friendVId, e);
         } catch (Exception e) {
             e.printStackTrace();
             g.tx().rollback();
-            LOGGER.error("addRelationByVID出现异常", e);
+            logger.error("addRelationByVID出现异常", e);
             throw e;
         }
     }
@@ -85,7 +99,7 @@ public class TitanDAOImpl extends TitanConPool implements ITitanDAO, Serializabl
     public void addRelation(String userId, String friendUserId) {
         String userVId = esDAO.getVertexId(userId);
         String friendVId = esDAO.getVertexId(friendUserId);
-        TitanGraph graph = getTitanGraph(userId);
+        TitanGraph graph = pool.getTitanGraph(userId);
         if (userVId == null) {
             userVId = addUser(userId, graph);
         }
@@ -119,19 +133,19 @@ public class TitanDAOImpl extends TitanConPool implements ITitanDAO, Serializabl
      */
     public void deleteRelation(String userId, String friendUserId) {
         try {
-            GraphTraversalSource g = getTitanGraph(userId).traversal();
+            GraphTraversalSource g = pool.getTitanGraph(userId).traversal();
             g.V(esDAO.getVertexId(userId)).outE() //.hasLabel("knows")
                     .where(__.otherV().values("userId").is(friendUserId)).drop().iterate();
             g.tx().commit();
         } catch (FastNoSuchElementException e) {
-            LOGGER.warn("deleteRelation 失败,userId:" + userId + ",找不到相应的 vertex id。", e);
+            logger.warn("deleteRelation 失败,userId:" + userId + ",找不到相应的 vertex id。", e);
         } catch (Exception e) {
 
         }
     }
 
     public Set getAllFriendVIds(String userVId) {
-        GraphTraversal oneDegreeFriends = getTitanGraph().traversal().V(userVId).out("knows").id();
+        GraphTraversal oneDegreeFriends = pool.getTitanGraph().traversal().V(userVId).out("knows").id();
         return oneDegreeFriends.toSet();
     }
 
@@ -160,11 +174,11 @@ public class TitanDAOImpl extends TitanConPool implements ITitanDAO, Serializabl
      * @return
      */
     public Map<String, Integer> getFriendsLevel(String userId, List<String> friends) {
-        LOGGER.info("getFriendsLevel:userId:"+userId);
+        logger.info("getFriendsLevel:userId:" + userId);
         Map<String, Integer> result = new HashMap<String, Integer>();
         String userVID = esDAO.getVertexId(userId);
         String[] friendsVID = esDAO.getVertexIds(friends);
-        TitanGraph graph = getTitanGraph(userId);
+        TitanGraph graph = pool.getTitanGraph(userId);
         if (userVID != null && friendsVID.length > 0) {
             List<String> oneDegreeFriends = getOneDegreeFriends(userVID, friendsVID, graph);
             List<String> twoDegreeFriends = getTwoDegreeFriends(userVID, friendsVID, graph);
@@ -177,18 +191,7 @@ public class TitanDAOImpl extends TitanConPool implements ITitanDAO, Serializabl
         }
         return result;
     }
-/*
-    public List<UserVertexId> getUserVertexIdList() {
-        TitanGraph graph = getTitanGraph();
-        List<Vertex> vertexList = graph.traversal().V().toList();
-        List<UserVertexId> result = new ArrayList<UserVertexId>();
-        for (Vertex v: vertexList) {
-            if (v.values("userId").hasNext()) {
-                result.add(new UserVertexId(v.values("userId").next().toString(), v.id().toString()));
-            }
-        }
-        return result;
-    }*/
+
     /**
      * 获取共同好友数
      *
@@ -197,14 +200,14 @@ public class TitanDAOImpl extends TitanConPool implements ITitanDAO, Serializabl
      * @return
      */
     public Map<Object, Long> getComFriendsNum(String userId, List<String> friends) {
-        LOGGER.info("getComFriendsNum:userId:"+userId);
+        logger.info("getComFriendsList:userId:" + userId);
         String userVID = esDAO.getVertexId(userId);
         String[] vids = esDAO.getVertexIds(friends);
         if (userVID == null || vids.length == 0) {
-            LOGGER.info("不存在userId:" + userId + "顶点");
+            logger.info("不存在userId:" + userId + "顶点");
             return new HashMap<Object, Long>();
         } else {
-            return getTitanGraph(userId).traversal().V(userVID)
+            return pool.getTitanGraph(userId).traversal().V(userVID)
                     .aggregate("u")
                     .out("knows").out("knows")
                     .where(__.hasId(vids))
@@ -213,9 +216,58 @@ public class TitanDAOImpl extends TitanConPool implements ITitanDAO, Serializabl
         }
     }
 
+    public Map<String, Set<String>> getComFriendsList(String userId, List<String> anotherUserIds) {
+        logger.info("getComFriendsNum:userId:" + userId);
+        String userVID = esDAO.getVertexId(userId);
+        String[] anotherVIDs = esDAO.getVertexIds(anotherUserIds);
+        if (userVID == null || anotherVIDs.length == 0) {
+            logger.info("不存在userId:" + userId + "顶点");
+            return new HashMap<String, Set<String>>();
+        } else {
+            List<Path> paths = pool.getTitanGraph(userId).traversal()
+                    .V(userVID).aggregate("u")
+                    .out("knows")
+                    .out("knows")
+                    .where(__.hasId(anotherVIDs)).where(P.without("u")).path().by("userId").toList();
+            Map<String, Set<String>> result = new HashMap<String, Set<String>>();
+            String key = null;
+            Set<String> valueSet = null;
+            for (Path p : paths) {
+                key = p.get(2).toString();
+                if (result.containsKey(key)) {
+                    valueSet = result.get(key);
+                    valueSet.add(p.get(1).toString());
+                    result.put(key, valueSet);
+                } else {
+                    Set<String> set = new HashSet<String>();
+                    set.add(p.get(1).toString());
+                    result.put(key, set);
+                }
+            }
+            return result;
+        }
+    }
+
+    public Set<String> getComFriendsList(String userId, String anotherUserId) {
+        String anotherVID = esDAO.getVertexId(anotherUserId);
+        if (anotherVID == null) {
+            logger.info("不存在userId:" + anotherUserId + "顶点");
+            return new HashSet<String>();
+        } else {
+            Set<Object> objectSet = pool.getTitanGraph(userId).traversal().V().has("userId", userId).out("knows")
+                    .where(__.out("knows").hasId(anotherVID)).values("userId").toSet();
+            Set<String> result = new HashSet<String>();
+            for (Object o : objectSet) {
+                result.add((String) o);
+            }
+            return result;
+        }
+    }
+
     public static void main(String[] args) {
         TitanDAOImpl d = new TitanDAOImpl();
-        d.addRelation("4","111117");
+        d.deleteRelation("999", "162");
+        d.deleteRelation("999", "529");
         System.exit(0);
     }
 

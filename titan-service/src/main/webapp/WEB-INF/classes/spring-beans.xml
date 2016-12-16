@@ -16,11 +16,6 @@
 	<context:component-scan base-package="com.zjlp.face" />
 	<!-- 隐式地向 Spring 容器注册 -->
 	<context:annotation-config />
-	<bean id = "TitanConPool" class="com.zjlp.face.titan.service.TitanConPool">
-		<constructor-arg value="10" />
-	</bean>
-	<bean id = "TitanDAOImpl" class="com.zjlp.face.titan.service.impl.TitanDAOImpl">
-		<property name="pool" ref="TitanConPool"></property>
-	</bean>
-	<import resource="classpath:provider.xml"/>
+	<import resource="classpath:provider.xml" />
+	
 </beans>

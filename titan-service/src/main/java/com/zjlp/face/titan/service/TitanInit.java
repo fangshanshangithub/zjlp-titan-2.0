@@ -15,18 +15,28 @@ import org.slf4j.LoggerFactory;
 import java.time.temporal.ChronoUnit;
 import java.util.concurrent.ExecutionException;
 
-public class TitanInit extends TitanConPool {
+public class TitanInit {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(TitanInit.class);
+    private TitanConPool pool = new TitanConPool(1);
+
+    public TitanConPool getPool() {
+        return pool;
+    }
+
+    public void setPool(TitanConPool pool) {
+        this.pool = pool;
+    }
+
+    private static final Logger logger = LoggerFactory.getLogger(TitanInit.class);
 
     /**
      * 清空图,删除所有的顶点、边和索引
      */
     public void cleanTitanGraph() {
-        TitanGraph graph = getTitanGraph();
+        TitanGraph graph = pool.getTitanGraph();
         graph.close();
         TitanCleanup.clear(graph);
-        LOGGER.info("清空tatin中的所有数据");
+        logger.info("清空tatin中的所有数据");
     }
 
     public void createVertexLabel(TitanGraph graph) {
@@ -37,8 +47,8 @@ public class TitanInit extends TitanConPool {
     }
 
     public void setGlobalOfflineOption(String key, Object value) {
-        killAllTitanInstances();
-        TitanGraph graph = getTitanGraph();
+        pool.killAllTitanInstances();
+        TitanGraph graph = pool.getTitanGraph();
         TitanManagement mgmt = graph.openManagement();
         //设置GLOBAL_OFFLINE属性
         mgmt.set(key, value);
@@ -68,27 +78,26 @@ public class TitanInit extends TitanConPool {
                     .timeout(60, ChronoUnit.MINUTES) // set timeout to 60 min
                     .call();
         } catch (InterruptedException e) {
-            LOGGER.error("InterruptedException", e);
+            logger.error("InterruptedException", e);
         }
         //Reindex the existing data
         mgmt = graph.openManagement();
         try {
             mgmt.updateIndex(mgmt.getGraphIndex("userIdUnique"), SchemaAction.REINDEX).get();
         } catch (InterruptedException e) {
-            LOGGER.error("InterruptedException", e);
+            logger.error("InterruptedException", e);
         } catch (ExecutionException e) {
-            LOGGER.error("ExecutionException", e);
+            logger.error("ExecutionException", e);
         }
         mgmt.commit();
     }
 
     public void run() {
-
         cleanTitanGraph();
-        TitanGraph graph = getTitanGraph();
+        TitanGraph graph = pool.getTitanGraph();
         createVertexLabel(graph);
         createEdgeLabel(graph);
-        closeTitanGraph();
+        pool.closeTitanGraph();
     }
 
 }

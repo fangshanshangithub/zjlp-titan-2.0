@@ -2,6 +2,7 @@ package com.zjlp.face.titan.service;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 public interface ITitanDAO {
 
@@ -35,4 +36,13 @@ public interface ITitanDAO {
      */
     Map<Object, Long> getComFriendsNum(String userId, List<String> friends);
 
+    /**
+     * 查詢共同好友列表
+     * @param userId
+     * @param anotherUserIds
+     * @return
+     */
+    Map<String, Set<String>> getComFriendsList(String userId, List<String> anotherUserIds);
+
+    Set<String> getComFriendsList(String userId, String anotherUserId);
 }

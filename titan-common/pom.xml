@@ -12,6 +12,9 @@
 
     <artifactId>titan-common</artifactId>
     <packaging>jar</packaging>
+    <name>ZJLP Titan Project COMMON</name>
+    <url>http://www.o2osl.com/</url>
+
     <dependencies>
         <dependency>
             <groupId>org.elasticsearch</groupId>
@@ -35,5 +38,32 @@
             <artifactId>spark-sql_${scala.binary.version}</artifactId>
         </dependency>
     </dependencies>
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+            </plugin>
 
+            <plugin>
+                <artifactId>maven-remote-resources-plugin</artifactId>
+                <version>1.5</version>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>bundle</goal>
+                        </goals>
+                    </execution>
+                </executions>
+                <configuration>
+                    <includes>
+                        <include>**/config.properties</include>
+                        <include>**/titan-cassandra.properties</include>
+                        <include>**/simplelogger.properties</include>
+                    </includes>
+                </configuration>
+            </plugin>
+
+        </plugins>
+    </build>
 </project>

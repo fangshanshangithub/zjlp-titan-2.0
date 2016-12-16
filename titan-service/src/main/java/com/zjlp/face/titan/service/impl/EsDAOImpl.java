@@ -1,9 +1,9 @@
 package com.zjlp.face.titan.service.impl;
 
 import com.zjlp.face.titan.common.EsClient;
+import com.zjlp.face.titan.common.utils.ConfigUtil;
 import com.zjlp.face.titan.service.IEsDAO;
 import com.zjlp.face.titan.service.IfCache;
-import com.zjlp.face.titan.service.ServiceConfig;
 import com.zjlp.face.titan.service.UserVertexId;
 import org.elasticsearch.action.bulk.BulkRequestBuilder;
 import org.elasticsearch.action.get.GetResponse;
@@ -26,12 +26,12 @@ import static org.elasticsearch.common.xcontent.XContentFactory.jsonBuilder;
 
 @Service("EsDAOImpl")
 public class EsDAOImpl implements IEsDAO,Serializable {
-    private static final Logger LOGGER = LoggerFactory.getLogger(EsDAOImpl.class);
+    private static final Logger logger = LoggerFactory.getLogger(EsDAOImpl.class);
     private Client esClient = null;
-    private String titanEsIndex = ServiceConfig.get("titan-es-index");
+    private String titanEsIndex = ConfigUtil.get("titan-es-index");
     public Client getEsClient() {
         if (esClient == null) {
-            esClient = new EsClient().getEsClient(ServiceConfig.get("es.cluster.name"), ServiceConfig.get("es.nodes"), Integer.valueOf(ServiceConfig.get("es.client.port")));
+            esClient = new EsClient().getEsClient(ConfigUtil.get("es.cluster.name"), ConfigUtil.get("es.nodes"), Integer.valueOf(ConfigUtil.get("es.client.port")));
         }
         return esClient;
     }
@@ -48,7 +48,7 @@ public class EsDAOImpl implements IEsDAO,Serializable {
                                 .field("vertexId", item.vertexId())
                                 .endObject()));
             } catch (Exception e) {
-                LOGGER.error("ES插入索引失败.userId:" + item.userId() + ",vertexId:" + item.vertexId(), e);
+                logger.error("ES插入索引失败.userId:" + item.userId() + ",vertexId:" + item.vertexId(), e);
             }
         }
         bulkRequest.get();
@@ -85,7 +85,7 @@ public class EsDAOImpl implements IEsDAO,Serializable {
         if (results != null && results.length > 0)
             return results[0].getSource().get("vertexId").toString();
         else {
-            LOGGER.warn("return null!. ES的titan-es这个索引中没有这个id:" + userId);
+            logger.warn("return null!. ES的titan-es这个索引中没有这个id:" + userId);
             return null;
         }
     }
